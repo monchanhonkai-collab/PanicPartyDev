@@ -72,6 +72,9 @@ func on_lobby_joined(lobby_id: int, permissions: int, locked: bool, response: in
 		push_error("Failed to create Steam client peer: %s" % error)
 		return
 	multiplayer.multiplayer_peer = peer
+	multiplayer.connected_to_server.connect(_on_p2p_connected, CONNECT_ONE_SHOT)
+
+func _on_p2p_connected() -> void:
 	client_connected.emit()
 
 func on_join_requested(lobby_id: int, steam_id: int) -> void:

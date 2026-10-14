@@ -7,6 +7,7 @@ var gravity = 9.8
 @onready var model: Node3D = $Model
 @onready var anim_player: AnimationPlayer = $AnimationPlayer
 
+var character_path := ""
 var current_anim: String = ""
 
 func _enter_tree() -> void:
@@ -32,8 +33,8 @@ func _ready():
 			var gen_lib = load("res://assets/animations/general_animations.res")
 			if gen_lib:
 				anim_player.add_animation_library("general", gen_lib)
-	if GameSession.selected_character:
-		switch_character(GameSession.selected_character)
+	if character_path:
+		switch_character(character_path)
 	else:
 		play_anim("general/Idle_A")
 
@@ -41,40 +42,41 @@ func _physics_process(delta):
 	_ensure_nodes()
 	if multiplayer.multiplayer_peer == null:
 		return
-	
-	var has_authority = is_multiplayer_authority()
-	
-	if has_authority:
-		if not is_on_floor():
-			velocity.y -= gravity * delta
+	if not is_multiplayer_authority():
+		return
 
-		var input_dir = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
-		if input_dir == Vector2.ZERO:
-			if Input.is_key_pressed(KEY_W):
-				input_dir.y -= 1
-			if Input.is_key_pressed(KEY_S):
-				input_dir.y += 1
-			if Input.is_key_pressed(KEY_A):
-				input_dir.x -= 1
-			if Input.is_key_pressed(KEY_D):
-				input_dir.x += 1
-			input_dir = input_dir.normalized()
+	if not is_on_floor():
+		velocity.y -= gravity * delta
 
-		var direction = Vector3(input_dir.x, 0, input_dir.y)
+	var input_dir = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	if input_dir == Vector2.ZERO:
+		if Input.is_key_pressed(KEY_W):
+			input_dir.y -= 1
+		if Input.is_key_pressed(KEY_S):
+			input_dir.y += 1
+		if Input.is_key_pressed(KEY_A):
+			input_dir.x -= 1
+		if Input.is_key_pressed(KEY_D):
+			input_dir.x += 1
+		input_dir = input_dir.normalized()
 
-		if direction != Vector3.ZERO:
-			velocity.x = direction.x * SPEED
-			velocity.z = direction.z * SPEED
-			if model:
-				var target_rotation = atan2(direction.x, direction.z)
-				model.rotation.y = lerp_angle(model.rotation.y, target_rotation, ROTATION_SPEED * delta)
-			play_anim("movement/Walking_A")
-		else:
-			velocity.x = move_toward(velocity.x, 0, SPEED)
-			velocity.z = move_toward(velocity.z, 0, SPEED)
-			play_anim("general/Idle_A")
+	var direction = Vector3(input_dir.x, 0, input_dir.y)
 
-		move_and_slide()
+	if direction != Vector3.ZERO:
+		velocity.x = direction.x * SPEED
+		velocity.z = direction.z * SPEED
+		if model:
+			var target_rotation = atan2(direction.x, direction.z)
+			model.rotation.y = lerp_angle(model.rotation.y, target_rotation, ROTATION_SPEED * delta)
+		play_anim("movement/Walking_A")
+	else:
+		velocity.x = move_toward(velocity.x, 0, SPEED)
+		velocity.z = move_toward(velocity.z, 0, SPEED)
+		play_anim("general/Idle_A")
+
+	move_and_slide()
+	# ponytail: 60Hz unreliable sync, no interpolation; add smoothing if motion feels choppy
+	sync_state.rpc(position, model.rotation.y if model else 0.0, current_anim)
 
 @rpc("any_peer", "unreliable")
 func sync_state(new_pos: Vector3, rot_y: float, anim_name: String) -> void:
@@ -94,6 +96,7 @@ func play_anim(anim_name: String):
 
 func switch_character(glb_path: String):
 	_ensure_nodes()
+	character_path = glb_path
 	if model:
 		model.queue_free()
 	var new_scene = load(glb_path)
